@@ -1,0 +1,43 @@
+IMAGE_NAME = "bento/ubuntu-16.04"
+APP_NAME = "$APPLICATION"
+N = $NODES
+
+Vagrant.configure("2") do |config|
+    config.ssh.insert_key = false
+
+    config.vm.provider "virtualbox" do |v|
+        v.memory = 1024
+        v.cpus = 2
+    end
+      
+    (1..N).each do |i|
+        config.vm.define "#{APP_NAME}-node-#{i}" do |node|
+            node.vm.box = IMAGE_NAME
+            node.vm.network "private_network", ip: "$BASE_ADDRESS.$BASE_SUBNET.#{i + $BASE_IP_SUFFIX}"
+            node.vm.hostname = "#{APP_NAME}-node-#{i}"
+        end
+    end
+
+    config.vm.define "#{APP_NAME}-master" do |master|
+        master.vm.box = IMAGE_NAME
+        master.vm.network "private_network", ip: "$BASE_ADDRESS.$BASE_SUBNET.$BASE_IP_SUFFIX"
+        master.vm.hostname = "#{APP_NAME}-master"
+		config.exec.commands 'mkdir playbooks', directory: '~/'
+		config.exec.commands 'sudo apt-update && sudo apt-get install python-pip && sudo pip install ansible', directory: '~/'
+		config.vm.provision "file", source: "./install-tools", destination: "~/playbooks/install-tools"
+		config.vm.provision "file", source: "./kubernetes-setup", destination: "~/playbooks/kubernetes-setup"
+
+		config.vm.provision "file", source: "./hosts", destination: "~/playbooks/hosts"
+
+		config.vm.provision "file", source: "./$APPLICATION-master-vars.yml", destination: "~/playbooks/./$APPLICATION-master-vars.yml"
+
+		config.exec.commands 'sudo ansible-playbook -i ../hosts playbook.yml', directory: '~/playbooks/install-tools'
+		config.exec.commands 'sudo ansible-playbook --extra-vars="k8svarfile=../$APPLICATION-master-vars.yml" -i ../hosts master-playbook.yml', directory: '~/playbooks/kubernetes-setup'
+		(1..N).each do |i|
+			config.vm.provision "file", source: "./$APPLICATION-node-#{i}-vars.yml", destination: "~/playbooks/$APPLICATION-node-#{i}-vars.yml"
+			config.exec.commands 'sudo ansible-playbook --extra-vars="k8svarfile=../$APPLICATION-node-#{i}-vars.yml current_node=$APPLICATION-node-#{i}" -i ../hosts node-playbook.yml', directory: '~/playbooks/kubernetes-setup'
+		end
+			config.exec.commands 'rm -Rf ~/playbooks', directory: '~/'
+    end
+end
+

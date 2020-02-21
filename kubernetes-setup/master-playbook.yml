@@ -1,0 +1,68 @@
+---
+- hosts: master
+  become: true
+  
+vars_files:
+  - "{{ k8svarfile }}"
+
+tasks:
+  - name: Install packages that allow apt to be used over HTTPS
+    apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg-agent
+      - software-properties-common
+
+  - name: Add an apt signing key for Docker
+    apt_key:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      state: present
+
+  - name: Add apt repository for stable version
+    apt_repository:
+      repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu xenial stable
+      state: present
+
+  - name: Install docker and its dependecies
+    apt: 
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - docker-ce 
+      - docker-ce-cli 
+      - containerd.io
+    notify:
+      - docker status
+
+  - name: Add vagrant user to docker group
+    user:
+      name: vagrant
+      group: docker
+
+  - name: Include disable swap playbook
+    include: disable-swap.yml
+
+  - name: Include disable Kubernetes Tools playbook
+    include: install-kubernetes-tools.yml
+
+  - name: Include start Kubernetes Master Cluster
+    include: start-master-cluster.yml
+
+  - name: Install calico pod network
+    become: false
+    command: kubectl create -f https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/hosted/calico.yaml
+
+  - name: Include join Kubernetes Master Cluster
+    include: join-master-cluster.yml
+
+  handlers:
+    - name: docker status
+      service: name=docker state=started

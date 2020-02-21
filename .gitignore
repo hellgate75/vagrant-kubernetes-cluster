@@ -1,0 +1,6 @@
+**/Vagrantfile
+**/*master-vars.yml
+**/*node*-vars.yml
+**/hosts
+**/_Vagrantfile
+.vagrant
