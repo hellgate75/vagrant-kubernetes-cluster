@@ -1,12 +1,16 @@
-- hosts: all
+- name: Joing Cluster for Slave Node
+  hosts: node
   become: true
   tasks:
-  - name: Generate join command
-    command: kubeadm token create --print-join-command
-    register: join_command
+    - name: Generate join command
+      command: "kubeadm token create --print-join-command"
+      register: join_command
 
-  - name: Copy the join command to server location
-    copy: src=join-command dest=/tmp/join-command.sh mode=0777
+    - name: Copy the join command to server location
+      copy: 
+        src: join-command
+        dest: "/tmp/join-command.sh"
+        mode: "0777"
 
-  - name: Join the node to cluster
-    command: sh /tmp/join-command.sh
+    - name: Join the node to cluster
+      command: "sh /tmp/join-command.sh"

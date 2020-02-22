@@ -1,21 +1,27 @@
 ---
-- hosts: all
-become: true
+- name: Add Kubernetes tools
+  connection: network_cli
+  gather_facts: false
+  hosts: node
+  become: true
+  tasks:
+    - name: Add the Google signing key
+      apt_key: 
+        url: 'https://packages.cloud.google.com/apt/doc/apt-key.gpg'
+        state: present
 
-vars_files:
-  - vars.yml
+    - name: Add the k8s APT repo
+      apt_repository: 
+        repo: 'deb http://apt.kubernetes.io/ kubernetesxenial main'
+        state: present
 
-strategy: free
-
-tasks:
-  - name: Add the Google signing key
-  apt_key: url=https://packages.cloud.google.com/apt/doc/apt-key.gpg
-  state=present
-
-  - name: Add the k8s APT repo
-  apt_repository: repo='deb http://apt.kubernetes.io/ kubernetesxenial main'
-  state=present
-
-  - name: Install packages
-  apt: name={{ item }} state=installed update_cache=true force=yes
-  with_items: "{{ PACKAGES }}"
+    - name: Install packages
+      apt: 
+        name: "{{ item }}"
+        state: installed
+        update_cache: true
+        force: yes
+      with_items: 
+        - vim
+        - htop
+        - tmux

@@ -1,15 +1,16 @@
-- hosts: all
+- name: Disable Swap on Any Node
+  hosts: node
   become: true
   tasks:
-  - name: Remove swapfile from /etc/fstab
-    mount:
-      name: "{{ item }}"
-      fstype: swap
-      state: absent
-    with_items:
-      - swap
-      - none
+    - name: Remove swapfile from /etc/fstab
+      mount:
+        name: "{{ item }}"
+        fstype: swap
+        state: absent
+      with_items:
+        - swap
+        - none
 
-  - name: Disable swap
-    command: swapoff -a
-    when: ansible_swaptotal_mb > 0
+    - name: Disable swap
+      command: swapoff -a
+      when: ansible_swaptotal_mb > 0

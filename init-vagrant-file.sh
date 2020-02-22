@@ -18,6 +18,8 @@ SUBNET="50"
 BASE_IP=10
 APP_NAME="k8s"
 APP_NODES="2"
+APP_MEMORY="1024"
+APP_VCPUS="2"
 ANSWER=""
 while [ "y" != "$ANSWER" ] && [ "y" != "$ANSWER" ]
 do
@@ -81,38 +83,6 @@ replace_in_vagranfile "\\\$NODES" "$APP_NODES"
 replace_in_vagranfile "\\\$BASE_ADDRESS" "$BASE_ADDR"
 replace_in_vagranfile "\\\$BASE_SUBNET" "$SUBNET"
 replace_in_vagranfile "\\\$BASE_IP_SUFFIX" "$BASE_IP"
+replace_in_vagranfile "\\\$GUEST_MEMORY" "$APP_MEMORY"
+replace_in_vagranfile "\\\$GUEST_VCPUS" "$APP_VCPUS"
 
-
-SINGLE_HOSTS="[master]\n"
-SINGLE_HOSTS="$SINGLE_HOSTS$BASE_ADDR.$SUBNET.$BASE_IP\n\n"
-
-ALL_HOSTS="[all]\n"
-ALL_HOSTS="$ALL_HOSTS$BASE_ADDR.$SUBNET.$BASE_IP\n"
-for i in $(seq 1 $APP_NODES)
-do
-	IP_ADDR=$(( $BASE_IP + $i ))
-	ALL_HOSTS="$ALL_HOSTS$BASE_ADDR.$SUBNET.$IP_ADDR\n"
-	SINGLE_HOSTS="$SINGLE_HOSTS[$APP_NAME-node-$i]\n$BASE_ADDR.$SUBNET.$IP_ADDR\n\n"
-done
-
-echo -e "\n$ALL_HOSTS\n$SINGLE_HOSTS" > $FOLDER/hosts
-
-echo "---" > $FOLDER/$APP_NAME-master-vars.yml
-echo "node_ip: \"$BASE_ADDR.$SUBNET.$BASE_IP\"" >> $FOLDER/$APP_NAME-master-vars.yml
-echo "node_cidr: \"$BASE_ADDR.0.0/16\"" >> $FOLDER/$APP_NAME-master-vars.yml
-echo "node_name: \"$APP_NAME-master\"" >> $FOLDER/$APP_NAME-master-vars.yml
-
-for i in $(seq 1 $APP_NODES)
-do
-	echo "---" > $FOLDER/$APP_NAME-node-$i-vars.yml
-	IP_ADDR=$(( $BASE_IP + $i ))
-	echo "master_node_ip: \"$BASE_ADDR.$SUBNET.$IP_ADDR\"" >> $FOLDER/$APP_NAME-node-$i-vars.yml
-	echo "node_cidr: \"$BASE_ADDR.0.0/16\"" >> $FOLDER/$APP_NAME-node-$i-vars.yml
-	echo "node_ip: \"$BASE_ADDR.$SUBNET.$BASE_IP\"" >> $FOLDER/$APP_NAME-node-$i-vars.yml
-	echo "node_name: \"$APP_NAME-node-$i\"" >>  $FOLDER/$APP_NAME-node-$i-vars.yml
-done
-
-if [ "" != "$(which dos2unix)" ]; then
-	dos2unix $FOLDER/*.yml
-	dos2unix $FOLDER/hosts
-fi

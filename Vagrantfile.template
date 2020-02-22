@@ -1,23 +1,13 @@
 IMAGE_NAME = "bento/ubuntu-16.04"
 APP_NAME = "$APPLICATION"
 N = $NODES
-VAGRANT_SET="sudo chmod -Rf 766 /home/vagrant && sudo chmod -Rf 600 /home/vagrant/.ssh/* && sudo chown -Rf vagrant:vagrant /home/vagrant"
 
 Vagrant.configure("2") do |config|
     config.ssh.insert_key = false
 
     config.vm.provider "virtualbox" do |v|
-        v.memory = 1024
-        v.cpus = 2
-    end
-      
-    (1..N).each do |i|
-        config.vm.define "#{APP_NAME}-node-#{i}" do |node|
-            node.vm.box = IMAGE_NAME
-            node.vm.network "private_network", ip: "$BASE_ADDRESS.$BASE_SUBNET.#{i + $BASE_IP_SUFFIX}"
-            node.vm.hostname = "#{APP_NAME}-node-#{i}"
-			node.vm.synced_folder ".", "/vagrant", disabled: true
-        end
+        v.memory = $GUEST_MEMORY
+        v.cpus = $GUEST_VCPUS
     end
 
     config.vm.define "#{APP_NAME}-master" do |master|
@@ -25,22 +15,73 @@ Vagrant.configure("2") do |config|
         master.vm.network "private_network", ip: "$BASE_ADDRESS.$BASE_SUBNET.$BASE_IP_SUFFIX"
         master.vm.hostname = "#{APP_NAME}-master"
 		master.vm.synced_folder ".", "/vagrant", disabled: true
-		master.vm.provision "shell", inline: "#{VAGRANT_SET} && mkdir -p /home/vagrant/playbooks"
-		master.vm.provision "shell", inline: "apt-get update && apt-get install -y python-pip && pip -q install ansible"
-		master.vm.provision "shell", inline: "#{VAGRANT_SET}"
-
-		master.vm.provision "file", source: "./install-tools", destination: "/home/vagrant/playbooks/install-tools"
-		master.vm.provision "file", source: "./kubernetes-setup", destination: "/home/vagrant/playbooks/kubernetes-setup"
-		master.vm.provision "file", source: "./hosts", destination: "/home/vagrant/playbooks/hosts"
-		master.vm.provision "file", source: "./$APPLICATION-master-vars.yml", destination: "/home/vagrant/playbooks/./$APPLICATION-master-vars.yml"
-
-		master.vm.provision "shell", inline: "#{VAGRANT_SET} &&  cd /home/vagrant/playbooks/install-tools && ansible-playbook -i ../hosts playbook.yml"
-		master.vm.provision "shell", inline: "#{VAGRANT_SET} &&  cd /home/vagrant/playbooks/kubernetes-setup && ansible-playbook --extra-vars=\"k8svarfile=../$APPLICATION-master-vars.yml\" -i ../hosts master-playbook.yml"
-		(1..N).each do |i|
-			master.vm.provision "file", source: "./$APPLICATION-node-#{i}-vars.yml", destination: "/home/vagrant/playbooks/$APPLICATION-node-#{i}-vars.yml"
-			master.vm.provision "shell", inline: "#{VAGRANT_SET} &&  cd /home/vagrant/playbooks/kubernetes-setup && ansible-playbook --extra-vars=\"k8svarfile=../$APPLICATION-node-#{i}-vars.yml current_node=$APPLICATION-node-#{i}\" -i ../hosts node-playbook.yml"
+		master.vm.synced_folder "data/", "/home/vagrant/data"
+		master.vm.provision :ansible do |ansible|
+			# Disable default limit to connect to all the machines
+			ansible.limit = "all"
+			ansible.playbook = "install-tools/playbook.yml"
+			ansible.groups = {
+			  "node" => ["#{APP_NAME}-master"],
+			  "node:vars" => {"ansible_connection" => "ssh",
+								"ansible_user" => "vagrant",
+								"ansible_pass" => "vagrant",
+								"ansible_ssh_user" => "vagrant",
+								"ansible_ssh_pass" => "vagrant"
+							 }
+			}
 		end
-			master.vm.provision "shell", inline: "#{VAGRANT_SET} &&  rm -Rf /home/vagrant/playbooks"
+		master.vm.provision :ansible do |ansible|
+			# Disable default limit to connect to all the machines
+			ansible.limit = "all"
+			ansible.playbook = "kubernetes-setup/master-playbook.yml"
+			ansible.groups = {
+			  "node" => ["#{APP_NAME}-master"],
+			  "node:vars" => {"ansible_connection" => "ssh",
+								"ansible_user" => "vagrant",
+								"ansible_pass" => "vagrant",
+								"ansible_ssh_user" => "vagrant",
+								"ansible_ssh_pass" => "vagrant"
+							 }
+			}
+		end
+    end
+
+    (1..N).each do |i|
+        config.vm.define "#{APP_NAME}-node-#{i}" do |node|
+            node.vm.box = IMAGE_NAME
+             node.vm.network "private_network", ip: "$BASE_ADDRESS.$BASE_SUBNET.#{i + $BASE_IP_SUFFIX}"
+            node.vm.hostname = "#{APP_NAME}-node-#{i}"
+			node.vm.synced_folder ".", "/vagrant", disabled: true
+			node.vm.synced_folder "data/", "/home/vagrant/data"
+			node.vm.provision :ansible do |ansible|
+				# Disable default limit to connect to all the machines
+				ansible.limit = "all"
+				ansible.playbook = "install-tools/playbook.yml"
+				ansible.groups = {
+				  "node" => ["#{APP_NAME}-node-#{i}"],
+				  "node:vars" => {"ansible_connection" => "ssh",
+									"ansible_user" => "vagrant",
+									"ansible_pass" => "vagrant",
+									"ansible_ssh_user" => "vagrant",
+									"ansible_ssh_pass" => "vagrant"
+								 }
+				}
+			end
+			node.vm.provision :ansible do |ansible|
+				# Disable default limit to connect to all the machines
+				ansible.limit = "all"
+				ansible.playbook = "kubernetes-setup/node-playbook.yml"
+				ansible.groups = {
+				  "node" => ["#{APP_NAME}-node-#{i}"],
+				  "node:vars" => {"ansible_connection" => "ssh",
+									"ansible_user" => "vagrant",
+									"ansible_pass" => "vagrant",
+									"ansible_ssh_user" => "vagrant",
+									"ansible_ssh_pass" => "vagrant"
+								 }
+				}
+			end
+        end
     end
 end
 
