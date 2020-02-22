@@ -111,3 +111,8 @@ do
 	echo "node_ip: \"$BASE_ADDR.$SUBNET.$BASE_IP\"" >> $FOLDER/$APP_NAME-node-$i-vars.yml
 	echo "node_name: \"$APP_NAME-node-$i\"" >>  $FOLDER/$APP_NAME-node-$i-vars.yml
 done
+
+if [ "" != "$(which dos2unix)" ]; then
+	dos2unix $FOLDER/*.yml
+	dos2unix $FOLDER/hosts
+fi

@@ -1,6 +1,7 @@
 IMAGE_NAME = "bento/ubuntu-16.04"
 APP_NAME = "$APPLICATION"
 N = $NODES
+VAGRANT_SET="sudo chmod -Rf 766 /home/vagrant && sudo chmod -Rf 600 /home/vagrant/.ssh/* && sudo chown -Rf vagrant:vagrant /home/vagrant"
 
 Vagrant.configure("2") do |config|
     config.ssh.insert_key = false
@@ -15,6 +16,7 @@ Vagrant.configure("2") do |config|
             node.vm.box = IMAGE_NAME
             node.vm.network "private_network", ip: "$BASE_ADDRESS.$BASE_SUBNET.#{i + $BASE_IP_SUFFIX}"
             node.vm.hostname = "#{APP_NAME}-node-#{i}"
+			node.vm.synced_folder ".", "/vagrant", disabled: true
         end
     end
 
@@ -22,22 +24,23 @@ Vagrant.configure("2") do |config|
         master.vm.box = IMAGE_NAME
         master.vm.network "private_network", ip: "$BASE_ADDRESS.$BASE_SUBNET.$BASE_IP_SUFFIX"
         master.vm.hostname = "#{APP_NAME}-master"
-		config.exec.commands 'mkdir playbooks', directory: '~/'
-		config.exec.commands 'sudo apt-update && sudo apt-get install python-pip && sudo pip install ansible', directory: '~/'
-		config.vm.provision "file", source: "./install-tools", destination: "~/playbooks/install-tools"
-		config.vm.provision "file", source: "./kubernetes-setup", destination: "~/playbooks/kubernetes-setup"
+		master.vm.synced_folder ".", "/vagrant", disabled: true
+		master.vm.provision "shell", inline: "#{VAGRANT_SET} && mkdir -p /home/vagrant/playbooks"
+		master.vm.provision "shell", inline: "apt-get update && apt-get install -y python-pip && pip -q install ansible"
+		master.vm.provision "shell", inline: "#{VAGRANT_SET}"
 
-		config.vm.provision "file", source: "./hosts", destination: "~/playbooks/hosts"
+		master.vm.provision "file", source: "./install-tools", destination: "/home/vagrant/playbooks/install-tools"
+		master.vm.provision "file", source: "./kubernetes-setup", destination: "/home/vagrant/playbooks/kubernetes-setup"
+		master.vm.provision "file", source: "./hosts", destination: "/home/vagrant/playbooks/hosts"
+		master.vm.provision "file", source: "./$APPLICATION-master-vars.yml", destination: "/home/vagrant/playbooks/./$APPLICATION-master-vars.yml"
 
-		config.vm.provision "file", source: "./$APPLICATION-master-vars.yml", destination: "~/playbooks/./$APPLICATION-master-vars.yml"
-
-		config.exec.commands 'sudo ansible-playbook -i ../hosts playbook.yml', directory: '~/playbooks/install-tools'
-		config.exec.commands 'sudo ansible-playbook --extra-vars="k8svarfile=../$APPLICATION-master-vars.yml" -i ../hosts master-playbook.yml', directory: '~/playbooks/kubernetes-setup'
+		master.vm.provision "shell", inline: "#{VAGRANT_SET} &&  cd /home/vagrant/playbooks/install-tools && ansible-playbook -i ../hosts playbook.yml"
+		master.vm.provision "shell", inline: "#{VAGRANT_SET} &&  cd /home/vagrant/playbooks/kubernetes-setup && ansible-playbook --extra-vars=\"k8svarfile=../$APPLICATION-master-vars.yml\" -i ../hosts master-playbook.yml"
 		(1..N).each do |i|
-			config.vm.provision "file", source: "./$APPLICATION-node-#{i}-vars.yml", destination: "~/playbooks/$APPLICATION-node-#{i}-vars.yml"
-			config.exec.commands 'sudo ansible-playbook --extra-vars="k8svarfile=../$APPLICATION-node-#{i}-vars.yml current_node=$APPLICATION-node-#{i}" -i ../hosts node-playbook.yml', directory: '~/playbooks/kubernetes-setup'
+			master.vm.provision "file", source: "./$APPLICATION-node-#{i}-vars.yml", destination: "/home/vagrant/playbooks/$APPLICATION-node-#{i}-vars.yml"
+			master.vm.provision "shell", inline: "#{VAGRANT_SET} &&  cd /home/vagrant/playbooks/kubernetes-setup && ansible-playbook --extra-vars=\"k8svarfile=../$APPLICATION-node-#{i}-vars.yml current_node=$APPLICATION-node-#{i}\" -i ../hosts node-playbook.yml"
 		end
-			config.exec.commands 'rm -Rf ~/playbooks', directory: '~/'
+			master.vm.provision "shell", inline: "#{VAGRANT_SET} &&  rm -Rf /home/vagrant/playbooks"
     end
 end
 
